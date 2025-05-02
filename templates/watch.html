@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ video.title if video else 'Просмотр видео' }} - VideoHub</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Стили в основном те же, но добавлена ссылка на канал и подписки */
+        body { background-color: #f8f9fa; }
+        .container { max-width: 1140px; margin: auto; }
+        .video-main-content { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-top: 20px; }
+        .video-player-container { margin-bottom: 20px; background-color: #000;}
+        .video-player { width: 100%; display: block; max-height: 70vh; }
+        .video-details h1 { margin-bottom: 10px; font-size: 1.8em; word-wrap: break-word;}
+        .video-meta { color: #6c757d; font-size: 0.9em; margin-bottom: 15px; }
+        .video-meta a { color: #0056b3; text-decoration: none; font-weight: 500;}
+        .video-meta a:hover { text-decoration: underline; }
+        .channel-info-watch { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; padding-bottom: 15px; border-bottom: 1px solid #eee; margin-bottom: 15px;}
+        .channel-avatar-watch { width: 40px; height: 40px; border-radius: 50%; background-color: #6c757d; color: white; display: flex; align-items: center; justify-content: center; font-size: 1.1em; font-weight: bold; text-transform: uppercase; flex-shrink: 0; margin-right: 10px;}
+        .channel-name-watch { font-weight: 500; }
+        .channel-subscribers-watch { font-size: 0.9em; color: #6c757d; }
+        .like-section { margin-top: 15px; margin-bottom: 25px; display: flex; flex-wrap: wrap; align-items: center; gap: 15px; }
+        .like-section .btn { min-width: 100px; }
+        .video-description { margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee; word-wrap: break-word;}
+        .comments-section { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
+        .comment-form { border: 1px solid #dee2e6; padding: 15px; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 20px; }
+        .comment-list { margin-top: 20px; list-style: none; padding: 0; }
+        .comment-item { border: 1px solid #eee; margin-bottom: 10px; padding: 10px 15px; background-color: #fff; border-radius: 3px; position: relative; word-wrap: break-word; }
+        .comment-meta { font-size: 0.85em; color: #666; margin-top: 5px; }
+        .no-comments { color: #777; font-style: italic; }
+        .flash { padding: 10px 15px; margin-bottom: 20px; border-radius: 4px; border: 1px solid transparent;}
+        .flash-success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; } .flash-danger { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; } .flash-warning { color: #856404; background-color: #fff3cd; border-color: #ffeeba; } .flash-info { color: #0c5460; background-color: #d1ecf1; border-color: #bee5eb; }
+        .alert { padding: 10px 15px; margin-bottom: 15px; border: 1px solid transparent; border-radius: 4px; }
+        .alert-success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; } .alert-warning { color: #856404; background-color: #fff3cd; border-color: #ffeeba; } .alert-danger { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; } .alert-secondary { color: #383d41; background-color: #e2e3e5; border-color: #d6d8db; }
+        .invalid-feedback { color: #dc3545; font-size: 0.875em; }
+        .is-invalid { border-color: #dc3545 !important; }
+        .form-control.is-invalid:focus { box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25); }
+        .back-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="mt-3 back-nav">
+            <a href="{{ url_for('index') }}">← На главную</a>
+            <span class="text-muted">VideoHub</span>
+        </nav>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                     <div class="flash flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="row">
+            <div class="col-lg-8 col-md-12">
+                <div class="video-main-content">
+                    {% if video %}
+                        <div class="video-player-container">
+                             <video controls class="video-player" preload="metadata" poster="{{ url_for('static', filename='thumbnails/' + video.thumbnail_filename) if video.thumbnail_filename else '' }}">
+                                <source src="{{ url_for('uploaded_file', filename=video.filename) }}" type="video/mp4">
+                                <p>Ваш браузер не поддерживает HTML5 видео. <a href="{{ url_for('uploaded_file', filename=video.filename) }}">Скачать файл</a>.</p>
+                            </video>
+                        </div>
+
+                        <div class="video-details mb-3">
+                            <h1>{{ video.title }}</h1>
+                            <p class="video-meta">
+                                Загружено: {{ video.upload_date.strftime('%d.%m.%Y в %H:%M') if video.upload_date else 'Неизвестно' }}
+                            </p>
+                        </div>
+
+                        {# --- ИНФОРМАЦИЯ О КАНАЛЕ И ПОДПИСКА --- #}
+                        {% if video.channel %}
+                        <div class="channel-info-watch">
+                            <div class="d-flex align-items-center">
+                                <div class="channel-avatar-watch" title="{{ video.channel.name }}">
+                                      {{ video.channel.name[0]|upper if video.channel.name else '?' }}
+                                 </div>
+                                 <div>
+                                     <a href="{{ url_for('channel_page', channel_id=video.channel.id) }}" class="channel-name-watch text-decoration-none text-dark">{{ video.channel.name }}</a>
+                                     <div class="channel-subscribers-watch">Подписчиков: {{ video.channel.subscriber_count }}</div>
+                                 </div>
+                            </div>
+                            {# Кнопка подписки/отписки #}
+                            <div class="subscribe-button-container-watch">
+                                 {% if current_user.is_authenticated and video.channel.owner_id != current_user.id %}
+                                     {% set is_sub = is_subscribed_to(video.channel) %}
+                                     <form method="POST" action="{{ url_for('unsubscribe' if is_sub else 'subscribe', channel_id=video.channel.id) }}" style="margin:0;">
+                                         <button type="submit" class="btn {{ 'btn-secondary' if is_sub else 'btn-danger' }} btn-sm">
+                                             {{ 'Отписаться' if is_sub else 'Подписаться' }}
+                                         </button>
+                                     </form>
+                                 {% elif current_user.is_authenticated and video.channel.owner_id == current_user.id %}
+                                     {# Ничего не показываем на своем канале здесь #}
+                                 {% elif not current_user.is_authenticated %}
+                                      <a href="{{ url_for('login', next=request.url) }}" class="btn btn-danger btn-sm">Подписаться</a>
+                                 {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {# --- КОНЕЦ ИНФОРМАЦИИ О КАНАЛЕ --- #}
+
+                         {# Секция лайков #}
+                        <div class="like-section">
+                             {% if current_user.is_authenticated %}
+                                 <button id="like-button" class="btn {% if is_currently_liked %}btn-primary{% else %}btn-outline-primary{% endif %}" data-filename="{{ video.filename }}">
+                                     {% if is_currently_liked %}👍 Лайк поставлен{% else %}👍 Поставить лайк{% endif %}
+                                 </button>
+                             {% else %}
+                                  <a href="{{ url_for('login', next=request.url) }}" class="btn btn-outline-primary">👍 Поставить лайк</a>
+                             {% endif %}
+                             <span class="like-count-display">Лайков: <strong id="like-count">{{ video.like_count | default(0) }}</strong></span>
+                        </div>
+
+                        {# Описание видео #}
+                        {% if video.description %}
+                            <div class="video-description">
+                                <h4>Описание</h4>
+                                <p>{{ video.description | nl2br }}</p>
+                            </div>
+                        {% endif %}
+
+                        {# --- СЕКЦИЯ КОММЕНТАРИЕВ --- #}
+                        <div class="comments-section">
+                            <h2>Комментарии ({{ comments|length }})</h2>
+                             {# ... (Форма и список комментариев - без изменений) ... #}
+                             {% with messages = get_flashed_messages(with_categories=true) %}
+                                {% if messages %}
+                                    {% for category, message in messages %}
+                                    {% if category != 'info' or 'комментар' in message|lower %}
+                                        <div class="alert alert-{{ category if category in ['success', 'warning', 'danger'] else 'secondary' }}" role="alert">
+                                        {{ message }}
+                                        </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                             {% endwith %}
+                             {% if current_user.is_authenticated %}
+                                {% if comment_form is defined and video is defined and video.filename is defined %}
+                                    <form method="POST" action="{{ url_for('add_comment', filename=video.filename) }}" class="comment-form mb-3">
+                                        {{ comment_form.hidden_tag() }}
+                                        <div class="mb-3">
+                                            {% if comment_form.comment_text.label %}{{ comment_form.comment_text.label(class="form-label") }}{% else %}<label for="comment_text" class="form-label">Ваш комментарий:</label>{% endif %}
+                                            {{ comment_form.comment_text(rows=3, class="form-control" ~ (" is-invalid" if comment_form.comment_text.errors else ""), placeholder="Оставьте ваш комментарий...", id="comment_text") }}
+                                            {% if comment_form.comment_text.errors %}<div class="invalid-feedback">{% for error in comment_form.comment_text.errors %}<span>{{ error }}</span><br>{% endfor %}</div>{% endif %}
+                                        </div>
+                                        {% if comment_form.errors and not comment_form.comment_text.errors %}<div class="alert alert-danger">{% for field, errors in comment_form.errors.items() %}{% if field != 'csrf_token' and field != 'comment_text' %}<strong>{{ comment_form[field].label.text }}:</strong> {{ errors|join(', ') }}<br>{% endif %}{% endfor %}</div>{% endif %}
+                                        <div>{{ comment_form.submit(class="btn btn-primary") }}</div>
+                                    </form>
+                                {% endif %}
+                             {% else %}
+                                 <p>Пожалуйста, <a href="{{ url_for('login', next=request.url if request is defined else url_for('index')) }}">войдите в систему</a>, чтобы оставить комментарий.</p>
+                             {% endif %}
+                             <ul class="list-group comment-list">
+                                {% if comments is defined %}
+                                    {% if comments %}
+                                        {% for comment in comments %}
+                                            <li class="list-group-item comment-item">
+                                                <div class="comment-body">{{ comment.text | nl2br }}</div>
+                                                <div class="comment-meta text-muted mt-2"><small>Добавлено: {{ comment.timestamp.strftime('%d.%m.%Y в %H:%M') if comment.timestamp else 'Неизвестно' }}</small></div>
+                                            </li>
+                                        {% endfor %}
+                                    {% else %}
+                                        <li class="list-group-item no-comments">Комментариев пока нет. {% if current_user is defined and current_user.is_authenticated %}Будьте первым!{% endif %}</li>
+                                    {% endif %}
+                                {% else %}
+                                    <li class="list-group-item list-group-item-danger">Ошибка конфигурации: Список комментариев не был передан.</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                        {# --- КОНЕЦ СЕКЦИИ КОММЕНТАРИЕВ --- #}
+
+                    {% else %}
+                        <div class="alert alert-danger mt-3" role="alert">Ошибка: Информация о видео не найдена.</div>
+                    {% endif %}
+                </div>
+            </div> {# Конец col-lg-8 #}
+            {# Опционально: Блок рекомендаций справа #}
+            {# <div class="col-lg-4 col-md-12"> ... </div> #}
+        </div> {# Конец .row #}
+
+        <div class="text-center mt-4 mb-4">
+             <a href="{{ url_for('index') }}" class="btn btn-secondary">← На главную</a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    {# JavaScript для лайков (без изменений) #}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() { /* ... (код JS для лайков) ... */ });
+    </script>
+</body>
+</html>

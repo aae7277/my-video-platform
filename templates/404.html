@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель Администратора</title>
+     <style>
+        body { font-family: sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: auto; background: #f9f9f9; padding: 20px; border-radius: 5px;}
+        .flash { padding: 10px 15px; margin-bottom: 15px; border-radius: 4px; border: 1px solid transparent;}
+        .flash-success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; } .flash-danger { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
+        .flash-warning { color: #856404; background-color: #fff3cd; border-color: #ffeeba; } .flash-info { color: #0c5460; background-color: #d1ecf1; border-color: #bee5eb; }
+        .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px; }
+        .admin-header h1 { margin: 0; font-size: 1.8em;} .admin-header a.logout-link { color: #dc3545; text-decoration: none; padding: 5px 10px; border: 1px solid #dc3545; border-radius: 4px; white-space: nowrap;}
+        .admin-header a.logout-link:hover { background-color: #dc3545; color: white; }
+        .video-item { border: 1px solid #ddd; padding: 10px 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background-color: #fff; border-radius: 4px; flex-wrap: wrap; gap: 15px; }
+        .video-details { flex-grow: 1; margin-right: 10px; }
+        .video-details span { word-break: break-all; display: block; margin-bottom: 5px;}
+        .video-details .current-likes { font-size: 0.9em; color: #555; }
+        .video-actions { display: flex; align-items: center; gap: 15px; flex-wrap: nowrap; }
+        .video-actions form { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+        .video-actions input[type="number"] { padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; width: 80px; font-size: 0.9em; }
+        .video-actions input[type="submit"] { padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em; color: white; }
+        .video-actions .delete-button { background-color: #dc3545; }
+        .video-actions .delete-button:hover { background-color: #c82333; }
+        .video-actions .set-likes-button { background-color: #007bff; }
+        .video-actions .set-likes-button:hover { background-color: #0056b3; }
+        a { color: #007bff; text-decoration: none;} a:hover { text-decoration: underline;}
+        hr { margin: 25px 0; border-top: 1px solid #eee;} .back-link-container { margin-top: 25px; }
+     </style>
+</head>
+<body>
+    <div class="container">
+        <div class="admin-header">
+             <h1>Панель Администратора</h1>
+             <span>Пользователь: {{ current_user.username }}</span>
+             <a href="{{ url_for('logout') }}" class="logout-link">Выйти</a>
+        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}
+              <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}{% endif %}{% endwith %}
+
+        <h2>Управление видео</h2>
+        <p>Здесь вы можете удалить видео или установить для него произвольное количество лайков.</p>
+
+        {% if videos_list %}
+          {% for video in videos_list %}
+            <div class="video-item">
+                <div class="video-details">
+                    <span>{{ video.filename }} (<a href="{{ url_for('watch_video', filename=video.filename) }}" target="_blank" title="Открыть видео в новой вкладке">Смотреть</a>)</span>
+                    <span class="current-likes">Текущие лайки: {{ video.like_count | default(0) }}</span>
+                </div>
+                 <div class="video-actions">
+                     {# --- Форма установки лайков --- #}
+                     <form method="post" style="margin-right: 10px;">
+                         <input type="hidden" name="action" value="set_likes">
+                         <input type="hidden" name="filename" value="{{ video.filename }}">
+                         <input type="number" name="new_like_count" min="0" placeholder="Лайки" required title="Введите новое количество лайков (0 или больше)" value="{{ video.like_count | default(0) }}">
+                         <input type="submit" value="Установить" class="set-likes-button">
+                     </form>
+                     {# --- Форма удаления --- #}
+                     <form method="post" onsubmit="return confirm('Вы уверены, что хотите УДАЛИТЬ видео {{ video.filename }} из базы данных и стереть его файлы? Это действие НЕОБРАТИМО!');">
+                         <input type="hidden" name="action" value="delete">
+                         <input type="hidden" name="filename" value="{{ video.filename }}">
+                         <input type="submit" value="Удалить" class="delete-button">
+                     </form>
+                 </div>
+            </div>
+          {% endfor %}
+        {% else %}
+            <p>В базе данных нет записей о видео.</p>
+        {% endif %}
+        <hr><div class="back-link-container"><a href="{{ url_for('index') }}">← Вернуться на главную</a></div>
+    </div>
+</body>
+</html>

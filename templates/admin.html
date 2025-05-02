@@ -1,0 +1,232 @@
+--- START OF FILE admin.html (исправлен TypeError конкатенации) ---
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title> {# Используем title из контекста #}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Добавим немного стилей для улучшения читаемости */
+        body { padding-bottom: 50px; }
+        .section-header { margin-top: 2rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #dee2e6;}
+        .table-responsive { margin-bottom: 1.5rem; }
+        .form-check-input { cursor: pointer; }
+        .action-forms form { margin-bottom: 0.5rem; }
+        .username-col { min-width: 120px; }
+        .channel-name-col { min-width: 150px; }
+        .video-title-col { min-width: 200px; }
+        .actions-col { min-width: 250px; white-space: nowrap; } /* Для кнопок и форм */
+        .form-inline .form-control { display: inline-block; width: auto; vertical-align: middle; margin-right: 5px; }
+        .form-inline .btn { vertical-align: middle; }
+        .form-label-sm { font-size: 0.875em; margin-bottom: 0.2rem; display: block; }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1>{{ title }}</h1>
+            <div>
+                <span>Пользователь: <strong>{{ current_user.username }}</strong></span>
+                <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-danger ms-2">Выйти</a>
+                <a href="{{ url_for('index') }}" class="btn btn-sm btn-outline-secondary ms-2">На главную</a>
+            </div>
+        </div>
+
+         {# Отображение flash-сообщений #}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category if category in ['success', 'danger', 'warning', 'info'] else 'secondary' }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        {# --- Управление Пользователями --- #}
+        <h2 class="section-header">Управление Пользователями</h2>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th class="username-col">Имя пользователя</th>
+                        <th>Email</th>
+                        <th>Канал</th>
+                        <th>Админ</th>
+                        <th class="actions-col">Действие (Роль)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>
+                            {% if user.channel %}
+                                <a href="{{ url_for('channel_page', channel_id=user.channel.id) }}" target="_blank">{{ user.channel.name }}</a>
+                            {% else %}
+                                <span class="text-muted">Нет</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ 'Да' if user.is_admin_role else 'Нет' }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('admin_panel') }}" class="form-inline">
+                                {{ set_role_form.hidden_tag() }} {# CSRF #}
+                                {{ set_role_form.user_id(value=user.id) }}
+                                <input type="hidden" name="action_type" value="set_role">
+                                <div class="form-check form-switch">
+                                    {# ИСПРАВЛЕНО: Добавлен |string к user.id для id атрибута #}
+                                    {{ set_role_form.is_admin(class="form-check-input", checked=user.is_admin_role, disabled=(user.id == current_user.id), onchange='this.form.submit()', id='is_admin-' + user.id|string ) }}
+                                    {# ИСПРАВЛЕНО: Добавлен |string к user.id для for атрибута #}
+                                    <label class="form-check-label" for="is_admin-{{ user.id|string }}">Права админа</label>
+                                    {% if user.id == current_user.id %}
+                                      <small class="text-muted d-block">(Нельзя снять с себя)</small>
+                                    {% endif %}
+                                </div>
+                                {# <button type="submit" class="btn btn-sm btn-primary ms-2">Сохранить</button> #}
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="text-center text-muted">Пользователи не найдены.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+         {# --- Управление Каналами --- #}
+        <h2 class="section-header">Управление Каналами</h2>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-sm">
+                 <thead>
+                     <tr>
+                        <th>ID</th>
+                        <th class="channel-name-col">Название</th>
+                        <th>Владелец</th>
+                        <th>Подписчики</th>
+                        <th>Описание</th>
+                        <th class="actions-col">Действия</th>
+                     </tr>
+                 </thead>
+                 <tbody>
+                    {% for channel in channels %}
+                    <tr>
+                        <td>{{ channel.id }}</td>
+                        <td><a href="{{ url_for('channel_page', channel_id=channel.id) }}" target="_blank">{{ channel.name }}</a></td>
+                        <td>{{ channel.owner.username if channel.owner else '???'}}</td>
+                        <td>{{ channel.subscriber_count }}</td>
+                        <td>{{ channel.description | truncate(80) if channel.description else '-' }}</td>
+                        <td class="action-forms">
+                            {# Форма редактирования канала #}
+                            <form method="POST" action="{{ url_for('admin_panel') }}">
+                                {{ edit_channel_form.hidden_tag() }}
+                                {{ edit_channel_form.channel_id(value=channel.id) }}
+                                <input type="hidden" name="action_type" value="edit_channel">
+                                <div>
+                                    {# ИСПРАВЛЕНО: Добавлен |string к channel.id для for/id атрибутов #}
+                                    <label class="form-label-sm" for="name-{{channel.id|string}}">Новое название:</label>
+                                    {{ edit_channel_form.name(class="form-control form-control-sm mb-1", value=channel.name, id="name-" + channel.id|string) }}
+                                </div>
+                                 <div>
+                                     {# ИСПРАВЛЕНО: Добавлен |string к channel.id для for/id атрибутов #}
+                                     <label class="form-label-sm" for="description-{{channel.id|string}}">Новое описание:</label>
+                                    {{ edit_channel_form.description(rows=2, class="form-control form-control-sm mb-1", id="description-" + channel.id|string) }} {# Убран |unescape #}
+                                 </div>
+                                {{ edit_channel_form.submit_channel(class="btn btn-sm btn-warning mt-1") }}
+                            </form>
+                            <hr class="my-2">
+                            {# Форма управления подписками #}
+                            <form method="POST" action="{{ url_for('admin_panel') }}" class="form-inline">
+                                 {{ sub_form.hidden_tag() }}
+                                 {{ sub_form.channel_id(value=channel.id) }}
+                                 <input type="hidden" name="action_type" value="manage_subscription">
+                                 <div>
+                                    {# ИСПРАВЛЕНО: Добавлен |string к channel.id для for/id атрибутов #}
+                                    <label class="form-label-sm" for="username-sub-{{channel.id|string}}">Имя пользователя:</label>
+                                     {{ sub_form.username(class="form-control form-control-sm", placeholder="Имя пользователя", id="username-sub-" + channel.id|string) }}
+                                 </div>
+                                 <div class="mt-1">
+                                    {{ sub_form.submit_subscribe(class="btn btn-sm btn-success") }}
+                                    {{ sub_form.submit_unsubscribe(class="btn btn-sm btn-secondary") }}
+                                 </div>
+                            </form>
+                        </td>
+                    </tr>
+                     {% else %}
+                     <tr><td colspan="6" class="text-center text-muted">Каналы не найдены.</td></tr>
+                     {% endfor %}
+                 </tbody>
+            </table>
+        </div>
+
+         {# --- Управление Видео --- #}
+         <h2 class="section-header">Управление Видео</h2>
+         <div class="table-responsive">
+             <table class="table table-striped table-hover table-sm">
+                 <thead>
+                     <tr>
+                        <th>ID</th>
+                        <th class="video-title-col">Название</th>
+                        <th>Канал</th>
+                        <th>Лайки</th>
+                        <th>Описание</th>
+                         <th class="actions-col">Действия</th>
+                     </tr>
+                 </thead>
+                 <tbody>
+                     {% for video in videos %}
+                     <tr>
+                         <td>{{ video.id }}</td>
+                         <td><a href="{{ url_for('watch_video', filename=video.filename) }}" target="_blank">{{ video.title }}</a></td>
+                         <td>{{ video.channel.name if video.channel else '???' }}</td>
+                         <td>{{ video.like_count }}</td>
+                         <td>{{ video.description | truncate(80) if video.description else '-'}}</td>
+                          <td class="action-forms">
+                             {# Форма редактирования видео #}
+                             <form method="POST" action="{{ url_for('admin_panel') }}">
+                                 {{ edit_video_form.hidden_tag() }}
+                                 {{ edit_video_form.video_id(value=video.id) }}
+                                 <input type="hidden" name="action_type" value="edit_video">
+                                  <div>
+                                      {# ИСПРАВЛЕНО: Добавлен |string к video.id для for/id атрибутов #}
+                                     <label class="form-label-sm" for="title-{{video.id|string}}">Новое название:</label>
+                                     {{ edit_video_form.title(class="form-control form-control-sm mb-1", value=video.title, id="title-" + video.id|string) }}
+                                 </div>
+                                  <div>
+                                      {# ИСПРАВЛЕНО: Добавлен |string к video.id для for/id атрибутов #}
+                                      <label class="form-label-sm" for="description-video-{{video.id|string}}">Новое описание:</label>
+                                     {{ edit_video_form.description(rows=2, class="form-control form-control-sm mb-1", id="description-video-" + video.id|string) }} {# Убран |unescape #}
+                                  </div>
+                                   <div>
+                                       {# ИСПРАВЛЕНО: Добавлен |string к video.id для for/id атрибутов #}
+                                       <label class="form-label-sm" for="like_count-{{video.id|string}}">Лайки:</label>
+                                      {{ edit_video_form.like_count(class="form-control form-control-sm mb-1", value=video.like_count, id="like_count-" + video.id|string) }}
+                                  </div>
+                                 {{ edit_video_form.submit_video(class="btn btn-sm btn-info mt-1") }}
+                             </form>
+                             <hr class="my-2">
+                             {# Форма удаления видео #}
+                             <form method="POST" action="{{ url_for('admin_panel') }}" onsubmit="return confirm('Вы уверены, что хотите УДАЛИТЬ видео \'{{ video.title }}\' и его файлы?');">
+                                 {# CSRF token (если включен, форма уже содержит его через hidden_tag выше, но если делать отдельную форму - добавить) #}
+                                 <input type="hidden" name="action_type" value="delete_video">
+                                 <input type="hidden" name="video_id" value="{{ video.id }}">
+                                 <button type="submit" class="btn btn-sm btn-danger">Удалить видео</button>
+                             </form>
+                         </td>
+                     </tr>
+                     {% else %}
+                      <tr><td colspan="6" class="text-center text-muted">Видео не найдены.</td></tr>
+                     {% endfor %}
+                 </tbody>
+             </table>
+         </div>
+
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+--- END OF FILE admin.html ---
